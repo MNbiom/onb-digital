@@ -28,20 +28,34 @@ module uart_tx #(
     logic [$clog2(CLKS_PER_BIT+1)-1:0] clk_cnt;
     logic [3:0] bit_cnt;
 
-    localparam IDLE     = 2'b00;
-    localparam START    = 2'b01;
-    localparam DATA     = 2'b10;
-    localparam STOP     = 2'b11;
+    typedef enum logic [1:0] {
+        IDLE,
+        START,
+        DATA,
+        STOP
+    } state_t;
 
-    logic [1:0] state;
+    state_t state;
+
     logic [7:0] tx_data_buf;
+
+    always_ff @(posedge clk) begin
+        if (!rst_n) begin
+            clk_cnt <= 0;
+        end else begin
+            if (clk_cnt == CLKS_PER_BIT-1) begin
+                clk_cnt <= 0;
+            end else if (state != IDLE) begin
+                clk_cnt <= clk_cnt + 1;
+            end
+        end
+    end
 
     always_ff @(posedge clk) begin
         if (!rst_n) begin
             txd <= 1;
             tx_ready <= 1;
             bit_cnt <= 0;
-            clk_cnt <= 0;
             state <= IDLE;
         end else begin
             case (state)
@@ -49,7 +63,7 @@ module uart_tx #(
                     if (tx_ready && tx_valid) begin
                         tx_data_buf <= tx_data;
                         tx_ready <= 0;
-                        clk_cnt <= 0;
+                        //clk_cnt <= 0;
                         state <= START;
                     end
                 end
@@ -57,13 +71,10 @@ module uart_tx #(
                 START: begin
                     if (clk_cnt == 0) begin
                         txd <= 0;
-                        clk_cnt <= clk_cnt + 1;
                     end else if (clk_cnt == CLKS_PER_BIT-1) begin
-                        clk_cnt <= 0;
+                        //clk_cnt <= 0;
                         bit_cnt <= 0;
                         state <= DATA;
-                    end else begin
-                        clk_cnt <= clk_cnt + 1;
                     end
                 end
 
@@ -71,25 +82,21 @@ module uart_tx #(
                     if (clk_cnt == 0) begin
                         txd <= tx_data_buf[0];
                         tx_data_buf <= tx_data_buf >> 1;
-                        clk_cnt <= clk_cnt + 1;
                         bit_cnt <= bit_cnt + 1;
                     end else if (clk_cnt == CLKS_PER_BIT-1) begin
-                        clk_cnt <= 0;
+                        //clk_cnt <= 0;
                         if (bit_cnt == 8) state <= STOP;
-                    end else begin
-                        clk_cnt <= clk_cnt + 1;
                     end
                 end
 
                 STOP: begin
                     if (clk_cnt == 0) begin
                         txd <= 1;
-                        clk_cnt <= clk_cnt + 1;
                     end else if (clk_cnt == CLKS_PER_BIT-1) begin
+                        //clk_cnt <= 0;
                         if (tx_valid) begin
                             tx_data_buf <= tx_data;
                             tx_ready <= 0;
-                            clk_cnt <= 0;
                             state <= START;
                         end
                         else begin
@@ -97,9 +104,6 @@ module uart_tx #(
                         end
                     end else if (clk_cnt == CLKS_PER_BIT-2) begin
                         tx_ready <= 1;
-                        clk_cnt <= clk_cnt + 1;
-                    end else begin
-                        clk_cnt <= clk_cnt + 1;
                     end
                 end
             endcase
