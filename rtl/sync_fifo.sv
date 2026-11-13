@@ -43,29 +43,29 @@ module sync_fifo #(
     assign almost_empty = (occupancy <= ALMOST_EMPTY_THRESH) ? 1 : 0;
     assign almost_full  = (occupancy >= ALMOST_FULL_THRESH) ? 1 : 0;
 
+    assign do_read  = rd_en && !empty;
+    assign do_write = wr_en && (!full || do_read);
+
     always_ff @(posedge clk) begin
         if (!rst_n) begin
             wr_ptr <= 0;
             rd_ptr <= 0;
             occupancy <= 0;
-            for (int i = 0; i < DEPTH; i = i + 1) mem[i] <= 0;
         end else begin
-            if (wr_en && !full) begin
-                if (!rd_en) occupancy <= occupancy + 1;
-
+            if (do_write) begin
+                mem[wr_ptr] <= wr_data;
                 if (wr_ptr == DEPTH-1) wr_ptr <= 0;
                 else wr_ptr <= wr_ptr + 1;
-
-                mem[wr_ptr] <= wr_data;
             end
-            if (rd_en && !empty) begin
-                if (!wr_en) occupancy <= occupancy - 1;
-                
+            if (do_read) begin
+                rd_data <= mem[rd_ptr];
                 if (rd_ptr == DEPTH-1) rd_ptr <= 0; 
                 else rd_ptr <= rd_ptr + 1;
-                
-                rd_data <= mem[rd_ptr];
             end
+            case ({do_write, do_read})
+                2'b10: occupancy <= occupancy + 1;
+                2'b01: occupancy <= occupancy - 1;
+            endcase
         end
     end
 
